@@ -1,0 +1,4 @@
+Data pulled from tables available here: https://cdsarc.cds.unistra.fr/ftp/J/MNRAS/403/1413/
+
+Original paper:
+Karakas, A. I., “Updated stellar yields from asymptotic giant branch models”, Monthly Notices of the Royal Astronomical Society, vol. 403, no. 3, pp. 1413–1425, 2010. doi:10.1111/j.1365-2966.2009.16198.x.

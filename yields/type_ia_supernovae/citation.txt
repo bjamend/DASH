@@ -1,0 +1,7 @@
+Data pulled directly from David Jeffery's (UNLV) site: https://www.physics.unlv.edu/~jeffery/astro/supernovae/spectra/model/w7
+
+W7 model developed by K. Nomoto, F.-K. Thielemann, and K. Yokoi:
+
+Nomoto, K., Thielemann, F.-K., and Yokoi, K., “Accreting white dwarf models for type I supern. III. Carbon deflagration supernovae.”, The Astrophysical Journal, vol. 286, pp. 644–658, 1984. doi:10.1086/162639.
+
+Thielemann, F.-K., Nomoto, K., and Yokoi, K., “Explosive nucleosynthesis in carbon deflagration models of Type I supernovae”, Astronomy and Astrophysics, vol. 158, no. 1–2, pp. 17–33, 1986.

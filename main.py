@@ -251,7 +251,7 @@ def explode_remnants(immortal_stars, white_dwarfs, neutron_stars):
         wd_remnant = white_dwarfs[i]
 
         if wd_remnant.age > 2.0:
-            u = randint(1, 3)
+            u = randint(1, 9)
 
             if u == 1:
                 ejecta += type_ia_supernova(wd_remnant)
@@ -513,8 +513,8 @@ def main():
         counter += 1
         time_series.append(t)
 
-    # abundance_pattern(immortal_stars, elements, "fe", "o", num_stars)
     age_metallicity(immortal_stars, elements, num_stars)
+    # abundance_pattern(immortal_stars, elements, "fe", "o", num_stars)
 
 
 main()

@@ -7,7 +7,7 @@ from calculate_yields import (
     planetary_nebula_yields,
     binary_neutron_star_merger_yields,
 )
-from plot_abundance_pattern import plot
+from plot_abundance_pattern import abundance_pattern, age_metallicity
 
 
 # Random Seed for Repeatable Runs
@@ -20,8 +20,6 @@ imf_power = -2.35
 
 # Elements to Evolve
 elements = ("h", "fe", "o", "mg", "eu")
-
-print(type(elements))
 
 # Milky Way Parameters
 present_day_total_surface_mass_density = 41.0  # [M. / pc^2]
@@ -252,7 +250,7 @@ def explode_remnants(immortal_stars, white_dwarfs, neutron_stars):
     while i < len(white_dwarfs):
         wd_remnant = white_dwarfs[i]
 
-        if wd_remnant.age > 4.0:
+        if wd_remnant.age > 2.0:
             u = randint(1, 3)
 
             if u == 1:
@@ -357,7 +355,9 @@ def binary_neutron_star_merger(ns_remnant):
     return ejecta
 
 
-def evolve_stars(mortal_stars, black_holes, white_dwarfs, neutron_stars, dt):
+def evolve_stars(
+    immortal_stars, mortal_stars, black_holes, white_dwarfs, neutron_stars, dt
+):
     """
     Evolve the ages of the stars.
 
@@ -373,6 +373,9 @@ def evolve_stars(mortal_stars, black_holes, white_dwarfs, neutron_stars, dt):
             dt: float
                     simulation timestep [Gyr]
     """
+    for i in range(len(immortal_stars)):
+        immortal_stars[i].age += dt
+
     for i in range(len(mortal_stars)):
         mortal_stars[i].age += dt
 
@@ -461,7 +464,9 @@ def advance_state(
     gas_mass += stellar_ejecta + remnant_ejecta
 
     # stars are evolved in time
-    evolve_stars(mortal_stars, black_holes, white_dwarfs, neutron_stars, dt)
+    evolve_stars(
+        immortal_stars, mortal_stars, black_holes, white_dwarfs, neutron_stars, dt
+    )
 
 
 def main():
@@ -477,7 +482,7 @@ def main():
     gas_mass = zeros(len(elements) + 1)
 
     t = 0.0
-    dt = 0.01
+    dt = 0.05
     t_max = 13.6
 
     element_list = dict([(element, 0.0) for element in elements])
@@ -485,6 +490,7 @@ def main():
     time_series = [t]
 
     counter = 0
+    num_stars = 1000
 
     while t < t_max:
         advance_state(
@@ -507,7 +513,8 @@ def main():
         counter += 1
         time_series.append(t)
 
-    plot(immortal_stars, elements, "fe", "o")
+    # abundance_pattern(immortal_stars, elements, "fe", "o", num_stars)
+    age_metallicity(immortal_stars, elements, num_stars)
 
 
 main()

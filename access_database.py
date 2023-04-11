@@ -9,6 +9,13 @@ import matplotlib.pyplot as plt
 
 
 def data_collection(element_1, element_2):
+    """
+    Fetch stellar chemical abundances from the SAGA database.
+
+    Inputs:
+            element_1, element_2: string
+                    [element_2 / element_1] <- log ratio
+    """
     print("\nSubmitting query to database...")
 
     # run in headless mode so no browser window pops up

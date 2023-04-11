@@ -2,6 +2,15 @@ from numpy import log10
 
 
 def log_ratio(element_name_1, element_name_2, element_abundance_1, element_abundance_2):
+    """
+    Calculate the log ratio of the abundances of two chemical elements: [element_2 / element_1]
+
+    Inputs:
+            element_name_1, element_name_2: strings
+                    symbols representing the chemical elements
+            element_abundance_1, element_abundance_2: floats
+                    chemical abundances of each element
+    """
     solar_abundance_1 = 0
     solar_abundance_2 = 0
     f1 = open(f"solar_abundances.txt", "r")

@@ -6,6 +6,17 @@ from calculate_log_ratios import log_ratio
 
 
 def plot(stars, elements, element_1, element_2):
+    """
+    Produce an abundance pattern plot of [element_2/element_1] vs. [Fe/H].
+
+    Inputs:
+            stars: class instance array
+                    list of stars still alive at the end of the simulation
+            elements: string tuple
+                    list of symbols for tracked chemical elements
+            element_1, element_2: string
+                    names of chemical elements being plotted
+    """
     x = []
     y = []
 

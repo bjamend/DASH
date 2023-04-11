@@ -21,6 +21,8 @@ imf_power = -2.35
 # Elements to Evolve
 elements = ("h", "fe", "o", "mg", "eu")
 
+print(type(elements))
+
 # Milky Way Parameters
 present_day_total_surface_mass_density = 41.0  # [M. / pc^2]
 gas_infall_timescale = 5.0  # [Gyr]

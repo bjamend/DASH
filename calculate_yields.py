@@ -1,6 +1,7 @@
 import numpy as np
 import re
 
+# list of all masses for which there are core-collapse supernova yields
 cc_mass_list = [
     9.0,
     9.25,
@@ -118,6 +119,7 @@ cc_mass_list = [
     29.6,
 ]
 
+# list of all masses for which there are planetary nebula yields
 pn_mass_list = [
     1.00,
     1.25,
@@ -139,18 +141,41 @@ pn_mass_list = [
 
 
 def identify_cc_mass(m):
+    """
+    Determine the mass from cc_mass_list that is closest to m.
+
+    Inputs:
+            m: float
+                    mass of star
+    """
     arr = np.asarray(cc_mass_list)
     i = (np.abs(arr - m)).argmin()
     return arr[i]
 
 
 def identify_pn_mass(m):
+    """
+    Determine the mass from pn_mass_list that is closest to m.
+
+    Inputs:
+            m: float
+                    mass of star
+    """
     arr = np.asarray(pn_mass_list)
     i = (np.abs(arr - m)).argmin()
     return arr[i]
 
 
 def core_collapse_supernova_yields(m, elements):
+    """
+    Return the fractional chemical yields from a core-collapse supernova from a progenitor star of mass m.
+
+    Inputs:
+            m: float
+                    mass of star
+            elements: string tuple
+                    list of symbols for tracked chemical elements
+    """
     mass = identify_cc_mass(m)
     species = np.zeros(len(elements) + 1)
     combined = []
@@ -171,6 +196,15 @@ def core_collapse_supernova_yields(m, elements):
 
 
 def planetary_nebula_yields(m, elements):
+    """
+    Return the fractional chemical yields from a planetary nebula from a progenitor star of mass m.
+
+    Inputs:
+            m: float
+                    mass of star
+            elements: string tuple
+                    list of symbols for tracked chemical elements
+    """
     mass = identify_pn_mass(m)
     species = np.zeros(len(elements) + 1)
     combined = []
@@ -191,6 +225,13 @@ def planetary_nebula_yields(m, elements):
 
 
 def type_ia_supernova_yields(elements):
+    """
+    Return the fractional chemical yields from a Type Ia supernova.
+
+    Inputs:
+            elements: string tuple
+                    list of symbols for tracked chemical elements
+    """
     remnant_mass = 1.3779094971180308
     species = np.zeros(len(elements) + 1)
     file = open(f"yields/type_ia_supernovae/typeia.dat", "r")
@@ -207,6 +248,13 @@ def type_ia_supernova_yields(elements):
 
 
 def binary_neutron_star_merger_yields(elements):
+    """
+    Return the fractional chemical yields from a binary neutron star merger.
+
+    Inputs:
+            elements: string tuple
+                    list of symbols for tracked chemical elements
+    """
     remnant_mass = 1.4
     species = np.zeros(len(elements) + 1)
     file = open(f"yields/binary_neutron_star_mergers/bnsyields.dat", "r")
@@ -223,6 +271,13 @@ def binary_neutron_star_merger_yields(elements):
 
 
 def gas_infall_abundances(elements):
+    """
+    Return the fractional chemical abundances of infalling gas from the circumgalactic medium.
+
+    Inputs:
+        elements: string tuple
+            list of symbols for tracked chemical elements
+    """
     abundances = np.zeros(len(elements) + 1)
     abundances[0] = 1
     return abundances

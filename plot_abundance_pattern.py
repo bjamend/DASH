@@ -46,9 +46,10 @@ def abundance_pattern(stars, elements, element_1, element_2, num_stars):
             if x2 != 0.0:
                 if y1 != 0.0:
                     if y2 != 0.0:
-                        x.append(log_ratio("h", "fe", x1, x2))
-                        y.append(log_ratio(element_1, element_2, y1, y2))
-                        counter += 1
+                        if star_selection.kind == "main-sequence":
+                            x.append(log_ratio("h", "fe", x1, x2))
+                            y.append(log_ratio(element_1, element_2, y1, y2))
+                            counter += 1
 
     data = data_collection(element_1, element_2)
 
@@ -112,9 +113,10 @@ def age_metallicity(stars, elements, num_stars):
 
         if x1 != 0.0:
             if x2 != 0.0:
-                x.append(log_ratio("h", "fe", x1, x2))
-                times.append(13.6 - star_selection.age)
-                counter += 1
+                if star_selection.kind == "main-sequence":
+                    x.append(log_ratio("h", "fe", x1, x2))
+                    times.append(13.6 - star_selection.age)
+                    counter += 1
 
     plt.rcParams.update(
         {

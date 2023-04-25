@@ -24,7 +24,7 @@ def abundance_pattern(stars, elements, element_1, element_2, num_stars):
 
     counter = 0
 
-    while counter < num_stars:
+    while counter < (2 * num_stars):
         star_selection = choice(stars)
 
         x1 = 0.0
@@ -126,10 +126,10 @@ def age_metallicity(stars, elements, num_stars):
         }
     )
 
-    fig = plt.figure(figsize=(9, 4.5))
+    fig = plt.figure(figsize=(5.0, 5.0))
     plt.scatter(times, x, color="k", s=15)
     plt.xlim(0.0, 13.6)
-    plt.ylim(-4.0, 1.0)
+    plt.ylim(-4.0, 2.0)
     plt.xlabel("Time (Gyr)")
     plt.ylabel("[Fe/H]")
     plt.show()

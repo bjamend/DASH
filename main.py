@@ -6,6 +6,7 @@ from calculate_yields import (
     type_ia_supernova_yields,
     planetary_nebula_yields,
     binary_neutron_star_merger_yields,
+    gas_outflow_abundances,
 )
 from plot_abundance_pattern import abundance_pattern, age_metallicity
 
@@ -97,6 +98,22 @@ def gas_infall_rate(t):
     infall = exp(-t / tau) * sigma_tot / tau / (1.0 - exp(-age / tau))
 
     return infall
+
+
+def gas_outflow_rate(t, star_formation_rate):
+    """
+    Return the surface rate density at which gas flows out of the
+    galaxy. [M. / Gyr / pc^2]
+
+    Inputs:
+            t: float
+                    current simulation time [Gyr]
+            current_stellar_mass: float
+                    mass of all stars in the galaxy at the current time [M.]
+    """
+    outflow = 2.0 * star_formation_rate
+
+    return outflow
 
 
 def star_formation_rate(sigma_gas):
@@ -191,6 +208,98 @@ def sort_stars(stars, mortal_stars, immortal_stars, mass_scaling_factor, t):
             mortal_stars.append(stars[i])
 
 
+def type_ia_delay(dtd):
+    """
+    Return delay time after which a Type Ia may occur [Gyr].
+
+    Inputs:
+            dtd: string
+                    name of delay time distribution
+    """
+    if dtd == "constant":
+        return 2.5
+
+    if dtd == "power_law":
+        u = uniform(0, 1)
+        return 10**u + 0.85
+
+    else:
+        return 0.0
+
+
+def core_collapse_supernova(star):
+    """
+    Return ejecta from a core-collapse supernova. [M.]
+
+    Inputs:
+            star: class instance
+                    single instance of the starParticle class
+    """
+    star.kind = "black-hole"
+    star.age = 0.0
+    remnant_mass = 0.01 * star.mass * star.mass - 0.1 * star.mass + 1.0
+    ejecta = (
+        (star.mass - remnant_mass) * star.mass_scaling_factor
+    ) * core_collapse_supernova_yields(star.mass, elements)
+    star.mass = remnant_mass
+
+    return ejecta
+
+
+def planetary_nebula(star):
+    """
+    Return ejecta from a planetary nebula. [M.]
+
+    Inputs:
+            star: class instance
+                    a single star nearing the end of its life
+    """
+    star.kind = "white-dwarf"
+    star.age = 0.0
+    ejecta = (
+        star.mass_scaling_factor
+        * (star.mass - 0.6)
+        * planetary_nebula_yields(star.mass, elements)
+    )
+    star.mass = 0.6
+
+    return ejecta
+
+
+def type_ia_supernova(wd_remnant):
+    """
+    Return ejecta from a type Ia supernova. [M.]
+
+    Inputs:
+            wd_remnant: class instance
+                    a single white dwarf remnant
+    """
+    ejecta = (
+        wd_remnant.mass
+        * wd_remnant.mass_scaling_factor
+        * type_ia_supernova_yields(elements)
+    )
+
+    return ejecta
+
+
+def binary_neutron_star_merger(ns_remnant):
+    """
+    Return ejecta from a binary neutron star merger. [M.]
+
+    Inputs:
+            ns_remnant: class instance
+                    a single neutron star remnant
+    """
+    ejecta = (
+        ns_remnant.mass
+        * ns_remnant.mass_scaling_factor
+        * binary_neutron_star_merger_yields(elements)
+    )
+
+    return ejecta
+
+
 def explode_stars(mortal_stars, black_holes, white_dwarfs, neutron_stars):
     """
     Return ejecta from explosions at the end of stars' lives. [M.]
@@ -250,8 +359,8 @@ def explode_remnants(immortal_stars, white_dwarfs, neutron_stars):
     while i < len(white_dwarfs):
         wd_remnant = white_dwarfs[i]
 
-        if wd_remnant.age > 2.0:
-            u = randint(1, 9)
+        if wd_remnant.age > type_ia_delay("power_law"):
+            u = randint(1, 3)
 
             if u == 1:
                 ejecta += type_ia_supernova(wd_remnant)
@@ -278,79 +387,6 @@ def explode_remnants(immortal_stars, white_dwarfs, neutron_stars):
 
         else:
             j += 1
-
-    return ejecta
-
-
-def core_collapse_supernova(star):
-    """
-    Return ejecta from a core-collapse supernova. [M.]
-
-    Inputs:
-            star: class instance
-                    single instance of the starParticle class
-    """
-    star.kind = "black-hole"
-    star.age = 0.0
-    remnant_mass = 0.01 * star.mass * star.mass - 0.1 * star.mass + 1.0
-    ejecta = (
-        (star.mass - remnant_mass) * star.mass_scaling_factor
-    ) * core_collapse_supernova_yields(star.mass, elements)
-    star.mass = remnant_mass
-
-    return ejecta
-
-
-def planetary_nebula(star):
-    """
-    Return ejecta from a planetary nebula. [M.]
-
-    Inputs:
-            star: class instance
-                    a single star nearing the end of its life
-    """
-    star.kind = "white-dwarf"
-    star.age = 0.0
-    ejecta = (
-        star.mass_scaling_factor
-        * (star.mass - 0.6)
-        * planetary_nebula_yields(star.mass, elements)
-    )
-    star.mass -= ejecta / star.mass_scaling_factor
-
-    return ejecta
-
-
-def type_ia_supernova(wd_remnant):
-    """
-    Return ejecta from a type Ia supernova. [M.]
-
-    Inputs:
-            wd_remnant: class instance
-                    a single white dwarf remnant
-    """
-    ejecta = (
-        wd_remnant.mass
-        * wd_remnant.mass_scaling_factor
-        * type_ia_supernova_yields(elements)
-    )
-
-    return ejecta
-
-
-def binary_neutron_star_merger(ns_remnant):
-    """
-    Return ejecta from a binary neutron star merger. [M.]
-
-    Inputs:
-            ns_remnant: class instance
-                    a single neutron star remnant
-    """
-    ejecta = (
-        ns_remnant.mass
-        * ns_remnant.mass_scaling_factor
-        * binary_neutron_star_merger_yields(elements)
-    )
 
     return ejecta
 
@@ -463,6 +499,15 @@ def advance_state(
     # ejected material is reincorporated into the ISM
     gas_mass += stellar_ejecta + remnant_ejecta
 
+    # material is ejected from the galaxy in outflowing winds
+    gas_mass -= (
+        dt
+        * gas_outflow_rate(t, star_formation_rate(sum(gas_mass) / galactic_area))
+        * gas_mass
+        / sum(gas_mass)
+        * galactic_area
+    )
+
     # stars are evolved in time
     evolve_stars(
         immortal_stars, mortal_stars, black_holes, white_dwarfs, neutron_stars, dt
@@ -482,7 +527,7 @@ def main():
     gas_mass = zeros(len(elements) + 1)
 
     t = 0.0
-    dt = 0.05
+    dt = 0.01
     t_max = 13.6
 
     element_list = dict([(element, 0.0) for element in elements])

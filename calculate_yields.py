@@ -279,5 +279,20 @@ def gas_infall_abundances(elements):
             list of symbols for tracked chemical elements
     """
     abundances = np.zeros(len(elements) + 1)
-    abundances[0] = 1
+    abundances[0] = 0.7
+    abundances[-1] = 0.3
+    return abundances
+
+
+def gas_outflow_abundances(elements):
+    """
+    Return the fractional chemical abundances of outflowing gas.
+
+    Inputs:
+        elements: string tuple
+            list of symbols for tracked chemical elements
+    """
+    abundances = np.zeros(len(elements) + 1)
+    abundances[0] = 0.9
+    abundances[1] = 0.1
     return abundances

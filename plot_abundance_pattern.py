@@ -128,8 +128,10 @@ def age_metallicity(stars, elements, num_stars):
 
     fig = plt.figure(figsize=(5.0, 5.0))
     plt.scatter(times, x, color="k", s=15)
+    plt.axvline(x=9.06, color="k", ls=":", lw=0.8)
+    plt.axhline(y=0.00, color="k", ls=":", lw=0.8)
     plt.xlim(0.0, 13.6)
-    plt.ylim(-4.0, 2.0)
+    plt.ylim(-4.0, 1.5)
     plt.xlabel("Time (Gyr)")
     plt.ylabel("[Fe/H]")
     plt.show()

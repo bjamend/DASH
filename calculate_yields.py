@@ -117,6 +117,10 @@ cc_mass_list = [
     29.1,
     29.2,
     29.6,
+    60.0,
+    80.0,
+    100.0,
+    120.0,
 ]
 
 # list of all masses for which there are planetary nebula yields

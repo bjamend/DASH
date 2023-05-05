@@ -1,5 +1,6 @@
 from random import randint, seed, uniform
 from numpy import array, exp, zeros
+import matplotlib.pyplot as plt
 from calculate_yields import (
     core_collapse_supernova_yields,
     gas_infall_abundances,
@@ -14,21 +15,31 @@ from plot_abundance_pattern import abundance_pattern, age_metallicity
 # Random Seed for Repeatable Runs
 seed(487)
 
-# Initial Mass Function Parameters
-lower_mass_bound = 0.1  # [M.]
-upper_mass_bound = 100.0  # [M.]
-imf_power = -2.35
-
 # Elements to Evolve
 elements = ("h", "fe", "o", "mg", "eu")
 
 # Milky Way Parameters
-present_day_total_surface_mass_density = 41.0  # [M. / pc^2]
-gas_infall_timescale = 5.0  # [Gyr]
+present_day_total_surface_mass_density = 54.0  # [M. / pc^2]
 galaxy_age = 13.6  # [Gyr]
+
+# Initial Mass Function Parameters
+lower_mass_bound = 0.1  # [M.]
+upper_mass_bound = 100.0  # [M.]
+kroupa_threshold_mass = 0.5  # [M.]
+salpeter_power = -2.35
+kroupa_power_1 = -1.3
+kroupa_power_2 = -2.3
+
+# Gas Infall Parameters
+gas_infall_timescale = 7.0  # [Gyr]
+
+# Gas Outflow Parameters
+mass_loading_factor = 0.72
+
+# Star Formation Parameters (Kennicutt-Schmidt)
 ks_star_formation_rate_power = 1.4
-star_formation_efficiency = 0.25  # [M.^(1-k) / Gyr / pc^2]
-galaxy_surface_area = 8.25e8  # [pc^2]
+sigma_0 = 1.0  # [M. / pc^2]
+star_formation_efficiency = 2.0  # [M. / Gyr / pc^2]
 
 
 class starParticle:
@@ -69,16 +80,41 @@ class starParticle:
         return lifetime
 
 
-def sample_mass():
+def sample_mass(imf):
     """
     Return a stellar mass randomly sampled from an initial mass
     function (IMF), hardcoded here as the Salpeter IMF. [M.]
+
+    Inputs:
+            inf: string
+                    initial mass function that is sampled from
     """
     m_l = lower_mass_bound
     m_u = upper_mass_bound
-    p = imf_power
     u = uniform(0, 1)
-    mass = (u * (m_u ** (p + 1) - m_l ** (p + 1)) + m_l ** (p + 1)) ** (1 / (p + 1))
+
+    if imf == "salpeter":
+        p = salpeter_power
+        mass = (u * (m_u ** (p + 1) - m_l ** (p + 1)) + m_l ** (p + 1)) ** (1 / (p + 1))
+
+    if imf == "kroupa":
+        m_t = kroupa_threshold_mass
+        alpha_1 = kroupa_power_1
+        alpha_2 = kroupa_power_2
+        A = 1.0 / (
+            (m_t ** (alpha_1 + 1) - m_l ** (alpha_1 + 1)) / (alpha_1 + 1)
+            + (m_u ** (alpha_2 + 1) - m_t ** (alpha_2 + 1))
+            * m_t ** (alpha_1 - alpha_2)
+            / (alpha_2 + 1)
+        )
+        u_threshold = A / (alpha_1 + 1) * (m_t ** (alpha_1 + 1) - m_l ** (alpha_1 + 1))
+        if u <= u_threshold:
+            mass = (u * (alpha_1 + 1) / A + m_l ** (alpha_1 + 1)) ** (1 / (alpha_1 + 1))
+        else:
+            mass = (
+                (u - u_threshold) * (alpha_2 + 1) / A / m_t ** (alpha_1 - alpha_2)
+                + m_t ** (alpha_2 + 1)
+            ) ** (1 / (alpha_2 + 1))
 
     return mass
 
@@ -111,7 +147,7 @@ def gas_outflow_rate(t, star_formation_rate):
             current_stellar_mass: float
                     mass of all stars in the galaxy at the current time [M.]
     """
-    outflow = 2.0 * star_formation_rate
+    outflow = mass_loading_factor * star_formation_rate
 
     return outflow
 
@@ -128,12 +164,12 @@ def star_formation_rate(sigma_gas):
     """
     k = ks_star_formation_rate_power
     nu = star_formation_efficiency
-    sfr = nu * sigma_gas**k
+    sfr = nu * (sigma_gas / sigma_0) ** k
 
     return sfr
 
 
-def form_stars(num_stars, gas_mass, galaxy_age, t):
+def form_stars(num_stars, sigma_gas, galaxy_age, t):
     """
     Return array of 'stars' (starParticle class instances).
 
@@ -152,10 +188,10 @@ def form_stars(num_stars, gas_mass, galaxy_age, t):
 
     for i in range(num_stars):
         star_age = 0.0
-        star_mass = sample_mass()
+        star_mass = sample_mass("kroupa")
         star_mass_scaling_factor = 1.0
         star_kind = "main-sequence"
-        star_composition = gas_mass / sum(gas_mass)
+        star_composition = sigma_gas / sum(sigma_gas)
         star = starParticle(
             star_age, star_mass, star_mass_scaling_factor, star_kind, star_composition
         )
@@ -235,12 +271,12 @@ def core_collapse_supernova(star):
             star: class instance
                     single instance of the starParticle class
     """
-    star.kind = "black-hole"
-    star.age = 0.0
-    remnant_mass = 0.01 * star.mass * star.mass - 0.1 * star.mass + 1.0
+    remnant_mass = 1.8
     ejecta = (
-        (star.mass - remnant_mass) * star.mass_scaling_factor
-    ) * core_collapse_supernova_yields(star.mass, elements)
+        ((star.mass - remnant_mass) * star.mass_scaling_factor)
+        * core_collapse_supernova_yields(star.mass, elements)
+        * array([1.0, 0.35, 0.35, 0.35, 0.35, 1.0])
+    )
     star.mass = remnant_mass
 
     return ejecta
@@ -254,8 +290,6 @@ def planetary_nebula(star):
             star: class instance
                     a single star nearing the end of its life
     """
-    star.kind = "white-dwarf"
-    star.age = 0.0
     ejecta = (
         star.mass_scaling_factor
         * (star.mass - 0.6)
@@ -278,6 +312,7 @@ def type_ia_supernova(wd_remnant):
         wd_remnant.mass
         * wd_remnant.mass_scaling_factor
         * type_ia_supernova_yields(elements)
+        * array([1.0, 0.35, 0.35, 0.35, 0.35, 1.0])
     )
 
     return ejecta
@@ -325,12 +360,18 @@ def explode_stars(mortal_stars, black_holes, white_dwarfs, neutron_stars):
             if star.mass > 8.0:
                 ejecta += core_collapse_supernova(star)
                 if star.mass > 2.5:
+                    star.kind = "black-hole"
+                    star.age = 0.0
                     black_holes.append(mortal_stars.pop(i))
                 else:
+                    star.kind = "neutron-star"
+                    star.age = 0.0
                     neutron_stars.append(mortal_stars.pop(i))
 
             else:
                 ejecta += planetary_nebula(star)
+                star.kind = "white-dwarf"
+                star.age = 0.0
                 white_dwarfs.append(mortal_stars.pop(i))
 
         else:
@@ -360,7 +401,7 @@ def explode_remnants(immortal_stars, white_dwarfs, neutron_stars):
         wd_remnant = white_dwarfs[i]
 
         if wd_remnant.age > type_ia_delay("power_law"):
-            u = randint(1, 3)
+            u = randint(1, 24)
 
             if u == 1:
                 ejecta += type_ia_supernova(wd_remnant)
@@ -429,8 +470,7 @@ def advance_state(
     t,
     dt,
     num_stars,
-    galactic_area,
-    gas_mass,
+    sigma_gas,
     immortal_stars,
     mortal_stars,
     black_holes,
@@ -447,8 +487,6 @@ def advance_state(
                     simulation timestep [Gyr]
             num_stars: int
                     number of stars to be formed
-            galactic_area: float
-                    surface area of the galaxy [pc^2]
             gas_mass: float array
                     mass by species of interstellar gas [M.]
             immortal_stars: class instance array
@@ -464,23 +502,20 @@ def advance_state(
     """
     # gas falls into the ISM from the CGM
     infalling_gas_density = dt * gas_infall_rate(t) * gas_infall_abundances(elements)
-    infalling_gas_mass = infalling_gas_density * galactic_area
-    gas_mass += infalling_gas_mass
+    sigma_gas += infalling_gas_density
 
     # gas is removed from the ISM for star formation
-    sigma_gas = sum(gas_mass) / galactic_area
     star_forming_gas_density = (
-        dt * star_formation_rate(sigma_gas) * gas_mass / sum(gas_mass)
+        dt * star_formation_rate(sigma_gas) * sigma_gas / sum(sigma_gas)
     )
-    star_forming_mass = star_forming_gas_density * galactic_area
-    gas_mass -= star_forming_mass
+    sigma_gas -= star_forming_gas_density
 
     # stars are formed from the gas set aside for star formation
-    stars = form_stars(num_stars, gas_mass, galaxy_age, t)
+    stars = form_stars(num_stars, sigma_gas, galaxy_age, t)
 
     # a mass scaling factor is computed to normalize the masses of the
     # new stars to the gas mass available for star formation
-    mass_scaling_factor = sum(star_forming_mass) / total_stellar_mass(stars)
+    mass_scaling_factor = sum(star_forming_gas_density) / total_stellar_mass(stars)
 
     # stars are classified as 'mortal' or 'immortal' based on their
     # lifetimes relative to the current time and the age of the galaxy
@@ -497,15 +532,14 @@ def advance_state(
     remnant_ejecta = explode_remnants(immortal_stars, white_dwarfs, neutron_stars)
 
     # ejected material is reincorporated into the ISM
-    gas_mass += stellar_ejecta + remnant_ejecta
+    sigma_gas += stellar_ejecta + remnant_ejecta
 
     # material is ejected from the galaxy in outflowing winds
-    gas_mass -= (
+    sigma_gas -= (
         dt
-        * gas_outflow_rate(t, star_formation_rate(sum(gas_mass) / galactic_area))
-        * gas_mass
-        / sum(gas_mass)
-        * galactic_area
+        * gas_outflow_rate(t, star_formation_rate(sum(sigma_gas)))
+        * sigma_gas
+        / sum(sigma_gas)
     )
 
     # stars are evolved in time
@@ -515,19 +549,16 @@ def advance_state(
 
 
 def main():
-    num_stars = 1000  # number of stars produced for each timestep
-    galactic_area = 8.25e8  # surface area of the galaxy [pc^2]
-
     immortal_stars = []
     mortal_stars = []
     black_holes = []
     white_dwarfs = []
     neutron_stars = []
 
-    gas_mass = zeros(len(elements) + 1)
+    sigma_gas = zeros(len(elements) + 1)
 
     t = 0.0
-    dt = 0.01
+    dt = 0.05
     t_max = 13.6
 
     element_list = dict([(element, 0.0) for element in elements])
@@ -535,15 +566,14 @@ def main():
     time_series = [t]
 
     counter = 0
-    num_stars = 1000
+    num_stars = 100  # number of stars produced for each timestep
 
     while t < t_max:
         advance_state(
             t,
             dt,
             num_stars,
-            galactic_area,
-            gas_mass,
+            sigma_gas,
             immortal_stars,
             mortal_stars,
             black_holes,
@@ -551,15 +581,15 @@ def main():
             neutron_stars,
         )
         for i in range(len(elements)):
-            element_list[elements[i]] += gas_mass[i]
+            element_list[elements[i]] += sigma_gas[i]
         if (counter % 10) == 0:
             print(f"Time: {t:.2f}Gyr")
         t += dt
         counter += 1
         time_series.append(t)
 
-    age_metallicity(immortal_stars, elements, num_stars)
-    # abundance_pattern(immortal_stars, elements, "fe", "o", num_stars)
+    # age_metallicity(immortal_stars, elements, num_stars)
+    abundance_pattern(immortal_stars, elements, "fe", "o", num_stars)
 
 
 main()

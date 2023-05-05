@@ -38,7 +38,7 @@ mass_loading_factor = 0.72
 
 # Star Formation Parameters (Kennicutt-Schmidt)
 ks_star_formation_rate_power = 1.4
-sigma_0 = 1.0  # [M. / pc^2]
+unit_surface_density = 1.0  # [M. / pc^2]
 star_formation_efficiency = 2.0  # [M. / Gyr / pc^2]
 
 
@@ -50,12 +50,11 @@ class starParticle:
     Attributes:
             age: float
                     current age of the star [Gyr]
-            intrinsic_mass: float
+            mass: float
                     mass of the star as sampled from the IMF [M.]
-            scaled_mass: float
-                    mass of the star normalized to the amount of available
-                    star-forming gas
-            kind: string
+            statistical_weight: float
+                    weighting of the intrinsic mass relative to the gas density available for star formation [1/pc^2]
+            classification: string
                     main-sequence, white-dwarf, black-hole, or neutron-star
             composition: float array
                     masses of all atomic species in the star [M.]
@@ -65,11 +64,11 @@ class starParticle:
                     Calculates the lifetime of a newborn star. [Gyr]
     """
 
-    def __init__(self, age, mass, mass_scaling_factor, kind, composition):
+    def __init__(self, age, mass, statistical_weight, classification, composition):
         self.age = age
         self.mass = mass
-        self.mass_ratio = mass_scaling_factor
-        self.kind = kind
+        self.statistical_weight = statistical_weight
+        self.classification = classification
         self.composition = composition
 
     def stellar_lifetime(self):
@@ -164,6 +163,7 @@ def star_formation_rate(sigma_gas):
     """
     k = ks_star_formation_rate_power
     nu = star_formation_efficiency
+    sigma_0 = unit_surface_density
     sfr = nu * (sigma_gas / sigma_0) ** k
 
     return sfr
@@ -189,11 +189,15 @@ def form_stars(num_stars, sigma_gas, galaxy_age, t):
     for i in range(num_stars):
         star_age = 0.0
         star_mass = sample_mass("kroupa")
-        star_mass_scaling_factor = 1.0
-        star_kind = "main-sequence"
+        star_statistical_weight = 1.0
+        star_classification = "main-sequence"
         star_composition = sigma_gas / sum(sigma_gas)
         star = starParticle(
-            star_age, star_mass, star_mass_scaling_factor, star_kind, star_composition
+            star_age,
+            star_mass,
+            star_statistical_weight,
+            star_classification,
+            star_composition,
         )
         stars.append(star)
 
@@ -216,7 +220,7 @@ def total_stellar_mass(stars):
     return stellar_mass
 
 
-def sort_stars(stars, mortal_stars, immortal_stars, mass_scaling_factor, t):
+def sort_stars(stars, mortal_stars, immortal_stars, statistical_weight, t):
     """
     Classify stars as either mortal or immortal based on their
     lifetimes and the remaining simulation time.
@@ -228,14 +232,14 @@ def sort_stars(stars, mortal_stars, immortal_stars, mass_scaling_factor, t):
                     list of stars that will die during the simulation
             immortal_stars: class instance array
                     list of stars that will live longer than the simulation
-            mass_scaling_factor: float
+            statistical_weight: float
                     the ratio of the starParticle mass to the representative
                     stellar mass
             t: float
                     current simulation time [Gyr]
     """
     for i in range(len(stars)):
-        stars[i].mass_scaling_factor = mass_scaling_factor
+        stars[i].statistical_weight = statistical_weight
 
         if stars[i].stellar_lifetime() > (galaxy_age - t):
             immortal_stars.append(stars[i])
@@ -273,7 +277,7 @@ def core_collapse_supernova(star):
     """
     remnant_mass = 1.8
     ejecta = (
-        ((star.mass - remnant_mass) * star.mass_scaling_factor)
+        ((star.mass - remnant_mass) * star.statistical_weight)
         * core_collapse_supernova_yields(star.mass, elements)
         * array([1.0, 0.35, 0.35, 0.35, 0.35, 1.0])
     )
@@ -291,7 +295,7 @@ def planetary_nebula(star):
                     a single star nearing the end of its life
     """
     ejecta = (
-        star.mass_scaling_factor
+        star.statistical_weight
         * (star.mass - 0.6)
         * planetary_nebula_yields(star.mass, elements)
     )
@@ -310,7 +314,7 @@ def type_ia_supernova(wd_remnant):
     """
     ejecta = (
         wd_remnant.mass
-        * wd_remnant.mass_scaling_factor
+        * wd_remnant.statistical_weight
         * type_ia_supernova_yields(elements)
         * array([1.0, 0.35, 0.35, 0.35, 0.35, 1.0])
     )
@@ -328,7 +332,7 @@ def binary_neutron_star_merger(ns_remnant):
     """
     ejecta = (
         ns_remnant.mass
-        * ns_remnant.mass_scaling_factor
+        * ns_remnant.statistical_weight
         * binary_neutron_star_merger_yields(elements)
     )
 
@@ -360,17 +364,17 @@ def explode_stars(mortal_stars, black_holes, white_dwarfs, neutron_stars):
             if star.mass > 8.0:
                 ejecta += core_collapse_supernova(star)
                 if star.mass > 2.5:
-                    star.kind = "black-hole"
+                    star.classification = "black-hole"
                     star.age = 0.0
                     black_holes.append(mortal_stars.pop(i))
                 else:
-                    star.kind = "neutron-star"
+                    star.classification = "neutron-star"
                     star.age = 0.0
                     neutron_stars.append(mortal_stars.pop(i))
 
             else:
                 ejecta += planetary_nebula(star)
-                star.kind = "white-dwarf"
+                star.classification = "white-dwarf"
                 star.age = 0.0
                 white_dwarfs.append(mortal_stars.pop(i))
 
@@ -513,13 +517,13 @@ def advance_state(
     # stars are formed from the gas set aside for star formation
     stars = form_stars(num_stars, sigma_gas, galaxy_age, t)
 
-    # a mass scaling factor is computed to normalize the masses of the
-    # new stars to the gas mass available for star formation
-    mass_scaling_factor = sum(star_forming_gas_density) / total_stellar_mass(stars)
+    # a statistical weight is computed to normalize the masses of the
+    # new stars to the gas density available for star formation
+    statistical_weight = sum(star_forming_gas_density) / total_stellar_mass(stars)
 
     # stars are classified as 'mortal' or 'immortal' based on their
     # lifetimes relative to the current time and the age of the galaxy
-    sort_stars(stars, mortal_stars, immortal_stars, mass_scaling_factor, t)
+    sort_stars(stars, mortal_stars, immortal_stars, statistical_weight, t)
 
     # stars eject content back into the ISM and their remnants are
     # classified as black holes, neutron stars, or white dwarves
@@ -588,8 +592,8 @@ def main():
         counter += 1
         time_series.append(t)
 
-    # age_metallicity(immortal_stars, elements, num_stars)
-    abundance_pattern(immortal_stars, elements, "fe", "o", num_stars)
+    age_metallicity(immortal_stars, elements, num_stars)
+    # abundance_pattern(immortal_stars, elements, "fe", "o", num_stars)
 
 
 main()

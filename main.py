@@ -44,8 +44,7 @@ star_formation_efficiency = 2.0  # [M. / Gyr / pc^2]
 
 class starParticle:
     """
-    A class to represent a star, which in turn represents a group
-    of identical stars.
+    A class to represent a star particle, itself representative of a population of identical stars.
 
     Attributes:
             age: float
@@ -53,11 +52,11 @@ class starParticle:
             mass: float
                     mass of the star as sampled from the IMF [M.]
             statistical_weight: float
-                    weighting of the intrinsic mass relative to the gas density available for star formation [1/pc^2]
+                    weighting of the intrinsic mass relative to the gas density available for star formation [1 / pc^2]
             classification: string
                     main-sequence, white-dwarf, black-hole, or neutron-star
             composition: float array
-                    masses of all atomic species in the star [M.]
+                    fractional abundances of all atomic species in the star, normalized to 1 [M. / pc^2]
 
     Methods:
             stellar_lifetime():
@@ -85,8 +84,8 @@ def sample_mass(imf):
     function (IMF), hardcoded here as the Salpeter IMF. [M.]
 
     Inputs:
-            inf: string
-                    initial mass function that is sampled from
+            imf: string
+                    name of initial mass function
     """
     m_l = lower_mass_bound
     m_u = upper_mass_bound
@@ -169,7 +168,7 @@ def star_formation_rate(sigma_gas):
     return sfr
 
 
-def form_stars(num_stars, sigma_gas, galaxy_age, t):
+def form_stars(num_stars, sigma_gas, galaxy_age):
     """
     Return array of 'stars' (starParticle class instances).
 
@@ -180,8 +179,6 @@ def form_stars(num_stars, sigma_gas, galaxy_age, t):
                     mass by species of interstellar gas [M.]
             galaxy_age: float
                     age of the galaxy [Gyr]
-            t: float
-                    current simulation time [Gyr]
     """
 
     stars = []
@@ -234,7 +231,7 @@ def sort_stars(stars, mortal_stars, immortal_stars, statistical_weight, t):
                     list of stars that will live longer than the simulation
             statistical_weight: float
                     the ratio of the starParticle mass to the representative
-                    stellar mass
+                    stellar mass density
             t: float
                     current simulation time [Gyr]
     """
@@ -504,18 +501,29 @@ def advance_state(
             neutron_stars: class instance array
                     list of neutron star remnants
     """
-    # gas falls into the ISM from the CGM
-    infalling_gas_density = dt * gas_infall_rate(t) * gas_infall_abundances(elements)
-    sigma_gas += infalling_gas_density
-
-    # gas is removed from the ISM for star formation
+    # gas is set aside for forming stars
     star_forming_gas_density = (
         dt * star_formation_rate(sigma_gas) * sigma_gas / sum(sigma_gas)
     )
-    sigma_gas -= star_forming_gas_density
+
+    # enriched material is returned to the ISM from stellar winds/explosive enrichment events
+    stellar_return_gas_density = explode_stars(
+        mortal_stars, black_holes, white_dwarfs, neutron_stars
+    ) + explode_remnants(immortal_stars, white_dwarfs, neutron_stars)
+
+    # gas falls into the ISM from the CGM
+    infalling_gas_density = dt * gas_infall_rate(t) * gas_infall_abundances(elements)
+
+    # gas flows out of the galaxy in winds
+    outflowing_gas_density = (
+        dt
+        * gas_outflow_rate(t, star_formation_rate(sum(sigma_gas)))
+        * sigma_gas
+        / sum(sigma_gas)
+    )
 
     # stars are formed from the gas set aside for star formation
-    stars = form_stars(num_stars, sigma_gas, galaxy_age, t)
+    stars = form_stars(num_stars, sigma_gas, galaxy_age)
 
     # a statistical weight is computed to normalize the masses of the
     # new stars to the gas density available for star formation
@@ -525,25 +533,12 @@ def advance_state(
     # lifetimes relative to the current time and the age of the galaxy
     sort_stars(stars, mortal_stars, immortal_stars, statistical_weight, t)
 
-    # stars eject content back into the ISM and their remnants are
-    # classified as black holes, neutron stars, or white dwarves
-    stellar_ejecta = explode_stars(
-        mortal_stars, black_holes, white_dwarfs, neutron_stars
-    )
-
-    # merging remnants eject material back into the ISM and are
-    # completely destroyed
-    remnant_ejecta = explode_remnants(immortal_stars, white_dwarfs, neutron_stars)
-
-    # ejected material is reincorporated into the ISM
-    sigma_gas += stellar_ejecta + remnant_ejecta
-
-    # material is ejected from the galaxy in outflowing winds
-    sigma_gas -= (
-        dt
-        * gas_outflow_rate(t, star_formation_rate(sum(sigma_gas)))
-        * sigma_gas
-        / sum(sigma_gas)
+    # the ISM mass by species is evolved in time
+    sigma_gas += (
+        infalling_gas_density
+        - star_forming_gas_density
+        + stellar_return_gas_density
+        - outflowing_gas_density
     )
 
     # stars are evolved in time
@@ -559,18 +554,20 @@ def main():
     white_dwarfs = []
     neutron_stars = []
 
-    sigma_gas = zeros(len(elements) + 1)
-
-    t = 0.0
-    dt = 0.05
+    dt = 0.01
+    t = dt
     t_max = 13.6
 
+    # gas is injected into the galaxy over one timestep to initialize everything
+    sigma_gas = dt * gas_infall_rate(dt) * gas_infall_abundances(elements)
     element_list = dict([(element, 0.0) for element in elements])
+    for i in range(len(elements)):
+        element_list[elements[i]] += sigma_gas[i]
 
     time_series = [t]
 
     counter = 0
-    num_stars = 100  # number of stars produced for each timestep
+    num_stars = 1000  # number of stars produced for each timestep
 
     while t < t_max:
         advance_state(

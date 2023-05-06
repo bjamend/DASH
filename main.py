@@ -117,7 +117,7 @@ def sample_mass(imf):
     return mass
 
 
-def gas_infall_rate(t):
+def gas_infall_rate(t, elements):
     """
     Return the surface rate density at which gas falls into the galaxy
     from the circumgalactic medium (CGM). [M. / Gyr / pc^2]
@@ -125,27 +125,32 @@ def gas_infall_rate(t):
     Inputs:
             t: float
                     current simulation time [Gyr]
+            elements: string list
+                    list of species being tracked
     """
     sigma_tot = present_day_total_surface_mass_density
     tau = gas_infall_timescale
     age = galaxy_age
-    infall = exp(-t / tau) * sigma_tot / tau / (1.0 - exp(-age / tau))
+    Lambda = sigma_tot / tau / (1.0 - exp(-age / tau))
+    infall = Lambda * exp(-t / tau) * gas_infall_abundances(elements)
 
     return infall
 
 
-def gas_outflow_rate(t, star_formation_rate):
+def gas_outflow_rate(sigma_gas):
     """
     Return the surface rate density at which gas flows out of the
     galaxy. [M. / Gyr / pc^2]
 
     Inputs:
-            t: float
-                    current simulation time [Gyr]
-            current_stellar_mass: float
-                    mass of all stars in the galaxy at the current time [M.]
+            sigma_gas: float
+                    mass density of ISM by species [M.]
     """
-    outflow = mass_loading_factor * star_formation_rate
+    outflow = (
+        mass_loading_factor
+        * star_formation_rate(sum(sigma_gas))
+        * (sigma_gas / sum(sigma_gas))
+    )
 
     return outflow
 
@@ -171,7 +176,6 @@ def star_formation_rate(sigma_gas):
 def form_stars(
     num_stars,
     sigma_gas,
-    galaxy_age,
     star_forming_gas_density,
     mortal_stars,
     immortal_stars,
@@ -185,8 +189,6 @@ def form_stars(
                 number of star particles to be formed
             sigma_gas: float
                 surface gas density [M. / pc^2]
-            galaxy_age: float
-                present-day age of the galaxy [Gyr]
             star_forming_gas_density: float array
                 mass density of star forming gas by species [M. / pc^2]
             mortal_stars: class instance array
@@ -247,9 +249,9 @@ def type_ia_delay(dtd):
         return 0.0
 
 
-def planetary_nebula(mortal_stars, white_dwarfs):
+def planetary_nebulae(mortal_stars, white_dwarfs):
     """
-    Return ejecta from a planetary nebula. [M.]
+    Return ejecta from planetary nebulae. [M.]
 
     Inputs:
             mortal_stars: class instance array
@@ -282,9 +284,9 @@ def planetary_nebula(mortal_stars, white_dwarfs):
     return ejecta
 
 
-def core_collapse_supernova(mortal_stars, neutron_stars, black_holes):
+def core_collapse_supernovae(mortal_stars, neutron_stars, black_holes):
     """
-    Return ejecta from a core-collapse supernova. [M.]
+    Return ejecta from core-collapse supernovae. [M.]
 
     Inputs:
             mortal_stars: class instance array
@@ -325,9 +327,9 @@ def core_collapse_supernova(mortal_stars, neutron_stars, black_holes):
     return ejecta
 
 
-def type_ia_supernova(white_dwarfs, immortal_stars):
+def type_ia_supernovae(white_dwarfs, immortal_stars):
     """
-    Return ejecta from a type Ia supernova. [M.]
+    Return ejecta from type Ia supernovae. [M.]
 
     Inputs:
             white_dwarfs: class instance array
@@ -362,9 +364,9 @@ def type_ia_supernova(white_dwarfs, immortal_stars):
     return ejecta
 
 
-def binary_neutron_star_merger(neutron_stars, immortal_stars):
+def binary_neutron_star_mergers(neutron_stars, immortal_stars):
     """
-    Return ejecta from a binary neutron star merger. [M.]
+    Return ejecta from binary neutron star mergers. [M.]
 
     Inputs:
             neutron_stars: class instance array
@@ -474,10 +476,10 @@ def advance_state(
         dt * star_formation_rate(sigma_gas) * sigma_gas / sum(sigma_gas)
     )
 
+    # form star particle objects
     form_stars(
         num_stars,
         sigma_gas,
-        galaxy_age,
         star_forming_gas_density,
         mortal_stars,
         immortal_stars,
@@ -486,22 +488,17 @@ def advance_state(
 
     # enriched material is returned to the ISM from stellar winds/explosive enrichment events
     stellar_return_gas_density = (
-        planetary_nebula(mortal_stars, white_dwarfs)
-        + core_collapse_supernova(mortal_stars, neutron_stars, black_holes)
-        + type_ia_supernova(white_dwarfs, immortal_stars)
-        + binary_neutron_star_merger(neutron_stars, immortal_stars)
+        planetary_nebulae(mortal_stars, white_dwarfs)
+        + core_collapse_supernovae(mortal_stars, neutron_stars, black_holes)
+        + type_ia_supernovae(white_dwarfs, immortal_stars)
+        + binary_neutron_star_mergers(neutron_stars, immortal_stars)
     )
 
     # gas falls into the ISM from the CGM
-    infalling_gas_density = dt * gas_infall_rate(t) * gas_infall_abundances(elements)
+    infalling_gas_density = dt * gas_infall_rate(t, elements)
 
     # gas flows out of the galaxy in winds
-    outflowing_gas_density = (
-        dt
-        * gas_outflow_rate(t, star_formation_rate(sum(sigma_gas)))
-        * sigma_gas
-        / sum(sigma_gas)
-    )
+    outflowing_gas_density = dt * gas_outflow_rate(sigma_gas)
 
     # the ISM mass by species is evolved in time
     sigma_gas += (
@@ -524,12 +521,12 @@ def main():
     white_dwarfs = []
     neutron_stars = []
 
-    dt = 0.05
-    t = dt
-    t_max = 13.6
+    dt = 0.05  # [Gyr]
+    t = dt  # [Gyr]
+    t_max = galaxy_age  # [Gyr]
 
     # gas is injected into the galaxy over one timestep to initialize everything
-    sigma_gas = dt * gas_infall_rate(dt) * gas_infall_abundances(elements)
+    sigma_gas = dt * gas_infall_rate(dt, elements)
     element_list = dict([(element, 0.0) for element in elements])
     for i in range(len(elements)):
         element_list[elements[i]] += sigma_gas[i]

@@ -546,11 +546,11 @@ def main():
             dt,
             num_stars,
             sigma_gas,
-            immortal_stars,
             mortal_stars,
-            black_holes,
+            immortal_stars,
             white_dwarfs,
             neutron_stars,
+            black_holes,
         )
         for i in range(len(elements)):
             element_list[elements[i]] += sigma_gas[i]

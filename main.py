@@ -168,19 +168,34 @@ def star_formation_rate(sigma_gas):
     return sfr
 
 
-def form_stars(num_stars, sigma_gas, galaxy_age):
+def form_stars(
+    num_stars,
+    sigma_gas,
+    galaxy_age,
+    star_forming_gas_density,
+    mortal_stars,
+    immortal_stars,
+    t,
+):
     """
-    Return array of 'stars' (starParticle class instances).
+    Form star particles, determine their statistical weights, and classify them as mortal or immortal.
 
     Inputs:
-            num_stars: float
-                    number of stars to be formed
-            gas_mass: float array
-                    mass by species of interstellar gas [M.]
+            num_stars: int
+                number of star particles to be formed
+            sigma_gas: float
+                surface gas density [M. / pc^2]
             galaxy_age: float
-                    age of the galaxy [Gyr]
+                present-day age of the galaxy [Gyr]
+            star_forming_gas_density: float array
+                mass density of star forming gas by species [M. / pc^2]
+            mortal_stars: class instance array
+                list of stars that will die during the simulation
+            immortal_stars: class instance array
+                list of stars that will live longer than the simulation
+            t: float
+                current simulation time [Gyr]
     """
-
     stars = []
 
     for i in range(num_stars):
@@ -198,45 +213,13 @@ def form_stars(num_stars, sigma_gas, galaxy_age):
         )
         stars.append(star)
 
-    return stars
-
-
-def total_stellar_mass(stars):
-    """
-    Return sum of sampled masses of newborn stars. [M.]
-
-    Inputs:
-            stars: class instance array
-                    list of starParticle objects
-    """
     stellar_mass = 0.0
 
     for i in range(len(stars)):
         stellar_mass += stars[i].mass
 
-    return stellar_mass
-
-
-def sort_stars(stars, mortal_stars, immortal_stars, statistical_weight, t):
-    """
-    Classify stars as either mortal or immortal based on their
-    lifetimes and the remaining simulation time.
-
-    Inputs:
-            stars: class instance array
-                    list of starParticle objects
-            mortal_stars: class instance array
-                    list of stars that will die during the simulation
-            immortal_stars: class instance array
-                    list of stars that will live longer than the simulation
-            statistical_weight: float
-                    the ratio of the starParticle mass to the representative
-                    stellar mass density
-            t: float
-                    current simulation time [Gyr]
-    """
     for i in range(len(stars)):
-        stars[i].statistical_weight = statistical_weight
+        stars[i].statistical_weight = sum(star_forming_gas_density) / stellar_mass
 
         if stars[i].stellar_lifetime() > (galaxy_age - t):
             immortal_stars.append(stars[i])
@@ -264,91 +247,15 @@ def type_ia_delay(dtd):
         return 0.0
 
 
-def core_collapse_supernova(star):
-    """
-    Return ejecta from a core-collapse supernova. [M.]
-
-    Inputs:
-            star: class instance
-                    single instance of the starParticle class
-    """
-    remnant_mass = 1.8
-    ejecta = (
-        ((star.mass - remnant_mass) * star.statistical_weight)
-        * core_collapse_supernova_yields(star.mass, elements)
-        * array([1.0, 0.35, 0.35, 0.35, 0.35, 1.0])
-    )
-    star.mass = remnant_mass
-
-    return ejecta
-
-
-def planetary_nebula(star):
+def planetary_nebula(mortal_stars, white_dwarfs):
     """
     Return ejecta from a planetary nebula. [M.]
 
     Inputs:
-            star: class instance
-                    a single star nearing the end of its life
-    """
-    ejecta = (
-        star.statistical_weight
-        * (star.mass - 0.6)
-        * planetary_nebula_yields(star.mass, elements)
-    )
-    star.mass = 0.6
-
-    return ejecta
-
-
-def type_ia_supernova(wd_remnant):
-    """
-    Return ejecta from a type Ia supernova. [M.]
-
-    Inputs:
-            wd_remnant: class instance
-                    a single white dwarf remnant
-    """
-    ejecta = (
-        wd_remnant.mass
-        * wd_remnant.statistical_weight
-        * type_ia_supernova_yields(elements)
-        * array([1.0, 0.35, 0.35, 0.35, 0.35, 1.0])
-    )
-
-    return ejecta
-
-
-def binary_neutron_star_merger(ns_remnant):
-    """
-    Return ejecta from a binary neutron star merger. [M.]
-
-    Inputs:
-            ns_remnant: class instance
-                    a single neutron star remnant
-    """
-    ejecta = (
-        ns_remnant.mass
-        * ns_remnant.statistical_weight
-        * binary_neutron_star_merger_yields(elements)
-    )
-
-    return ejecta
-
-
-def explode_stars(mortal_stars, black_holes, white_dwarfs, neutron_stars):
-    """
-    Return ejecta from explosions at the end of stars' lives. [M.]
-
-    Inputs:
             mortal_stars: class instance array
-                    list of stars that will die during the simulation
-            black_holes: class instance array
-                    list of black hole remnants
+                list of stars that will die during the simulation
             white_dwarfs: class instance array
-                    list of white dwarf remnants
-            neutron_stars: class instance array
-                    list of neutron star remnants
+                list of white dwarf remnants
     """
     i = 0
 
@@ -356,45 +263,79 @@ def explode_stars(mortal_stars, black_holes, white_dwarfs, neutron_stars):
 
     while i < len(mortal_stars):
         star = mortal_stars[i]
-
         if star.age > star.stellar_lifetime():
-            if star.mass > 8.0:
-                ejecta += core_collapse_supernova(star)
-                if star.mass > 2.5:
-                    star.classification = "black-hole"
-                    star.age = 0.0
-                    black_holes.append(mortal_stars.pop(i))
-                else:
-                    star.classification = "neutron-star"
-                    star.age = 0.0
-                    neutron_stars.append(mortal_stars.pop(i))
-
-            else:
-                ejecta += planetary_nebula(star)
+            if star.mass <= 8.0:
+                ejecta += (
+                    star.statistical_weight
+                    * (star.mass - 0.6)
+                    * planetary_nebula_yields(star.mass, elements)
+                )
+                star.mass = 0.6
                 star.classification = "white-dwarf"
                 star.age = 0.0
                 white_dwarfs.append(mortal_stars.pop(i))
-
+            else:
+                i += 1
         else:
             i += 1
 
     return ejecta
 
 
-def explode_remnants(immortal_stars, white_dwarfs, neutron_stars):
+def core_collapse_supernova(mortal_stars, neutron_stars, black_holes):
     """
-    Return ejecta from remnant explosions. [M.]
+    Return ejecta from a core-collapse supernova. [M.]
 
     Inputs:
-            immortal_stars: class instance array
-                    list of stars that will live longer than the simulation
-            white_dwarfs: class instance array
-                    list of white dwarf remnants
+            mortal_stars: class instance array
+                list of stars that will die during the simulation
             neutron_stars: class instance array
-                    list of neutron star remnants
+                list of neutron star remnants
+            black_holes: class instance array
+                list of black hole remnants
     """
     i = 0
-    j = 0
+
+    ejecta = zeros(len(elements) + 1)
+
+    remnant_mass = 1.8
+
+    while i < len(mortal_stars):
+        star = mortal_stars[i]
+        if star.age > star.stellar_lifetime():
+            if star.mass > 8.0:
+                ejecta += (
+                    (star.mass - remnant_mass) * star.statistical_weight
+                ) * core_collapse_supernova_yields(star.mass, elements)
+                if star.mass > 20.0:
+                    star.classification = "black-hole"
+                    star.mass = remnant_mass
+                    star.age = 0.0
+                    black_holes.append(mortal_stars.pop(i))
+                else:
+                    star.classification = "neutron-star"
+                    star.mass = remnant_mass
+                    star.age = 0.0
+                    neutron_stars.append(mortal_stars.pop(i))
+            else:
+                i += 1
+        else:
+            i += 1
+
+    return ejecta
+
+
+def type_ia_supernova(white_dwarfs, immortal_stars):
+    """
+    Return ejecta from a type Ia supernova. [M.]
+
+    Inputs:
+            white_dwarfs: class instance array
+                list of white dwarf remnants
+            immortal_stars: class instance array
+                list of stars that will live longer than the simulation
+    """
+    i = 0
 
     ejecta = zeros(len(elements) + 1)
 
@@ -405,7 +346,11 @@ def explode_remnants(immortal_stars, white_dwarfs, neutron_stars):
             u = randint(1, 24)
 
             if u == 1:
-                ejecta += type_ia_supernova(wd_remnant)
+                ejecta += (
+                    wd_remnant.mass
+                    * wd_remnant.statistical_weight
+                    * type_ia_supernova_yields(elements)
+                )
                 white_dwarfs.pop(i)
 
             else:
@@ -414,21 +359,42 @@ def explode_remnants(immortal_stars, white_dwarfs, neutron_stars):
         else:
             i += 1
 
-    while j < len(neutron_stars):
-        ns_remnant = neutron_stars[j]
+    return ejecta
+
+
+def binary_neutron_star_merger(neutron_stars, immortal_stars):
+    """
+    Return ejecta from a binary neutron star merger. [M.]
+
+    Inputs:
+            neutron_stars: class instance array
+                list of neutron star remnants
+            immortal_stars: class instance array
+                list of stars that will live longer than the simulation
+    """
+    i = 0
+
+    ejecta = zeros(len(elements) + 1)
+
+    while i < len(neutron_stars):
+        ns_remnant = neutron_stars[i]
 
         if ns_remnant.age > 0.5:
             u = randint(1, 30)
 
             if u == 1:
-                ejecta += binary_neutron_star_merger(ns_remnant)
-                neutron_stars.pop(j)
+                ejecta += (
+                    ns_remnant.mass
+                    * ns_remnant.statistical_weight
+                    * binary_neutron_star_merger_yields(elements)
+                )
+                neutron_stars.pop(i)
 
             else:
-                immortal_stars.append(neutron_stars.pop(j))
+                immortal_stars.append(neutron_stars.pop(i))
 
         else:
-            j += 1
+            i += 1
 
     return ejecta
 
@@ -440,6 +406,8 @@ def evolve_stars(
     Evolve the ages of the stars.
 
     Inputs:
+            immortal_stars: class instance array
+                list of stars that will live longer than the simulation
             mortal_stars: class instance array
                     list of stars that will die during the simulation
             black_holes: class instance array
@@ -472,11 +440,11 @@ def advance_state(
     dt,
     num_stars,
     sigma_gas,
-    immortal_stars,
     mortal_stars,
-    black_holes,
+    immortal_stars,
     white_dwarfs,
     neutron_stars,
+    black_holes,
 ):
     """
     Advance the state of the simulation by one timestep.
@@ -490,26 +458,39 @@ def advance_state(
                     number of stars to be formed
             gas_mass: float array
                     mass by species of interstellar gas [M.]
-            immortal_stars: class instance array
-                    list of stars that will live longer than the simulation
             mortal_stars: class instance array
                     list of stars that will die during the simulation
-            black_holes: class instance array
-                    list of black hole remnants
+            immortal_stars: class instance array
+                    list of stars that will live longer than the simulation
             white_dwarfs: class instance array
                     list of white dwarf remnants
             neutron_stars: class instance array
                     list of neutron star remnants
+            black_holes: class instance array
+                    list of black hole remnants
     """
-    # gas is set aside for forming stars
+    # gas is extracted from the ISM and set aside for star formation
     star_forming_gas_density = (
         dt * star_formation_rate(sigma_gas) * sigma_gas / sum(sigma_gas)
     )
 
+    form_stars(
+        num_stars,
+        sigma_gas,
+        galaxy_age,
+        star_forming_gas_density,
+        mortal_stars,
+        immortal_stars,
+        t,
+    )
+
     # enriched material is returned to the ISM from stellar winds/explosive enrichment events
-    stellar_return_gas_density = explode_stars(
-        mortal_stars, black_holes, white_dwarfs, neutron_stars
-    ) + explode_remnants(immortal_stars, white_dwarfs, neutron_stars)
+    stellar_return_gas_density = (
+        planetary_nebula(mortal_stars, white_dwarfs)
+        + core_collapse_supernova(mortal_stars, neutron_stars, black_holes)
+        + type_ia_supernova(white_dwarfs, immortal_stars)
+        + binary_neutron_star_merger(neutron_stars, immortal_stars)
+    )
 
     # gas falls into the ISM from the CGM
     infalling_gas_density = dt * gas_infall_rate(t) * gas_infall_abundances(elements)
@@ -521,17 +502,6 @@ def advance_state(
         * sigma_gas
         / sum(sigma_gas)
     )
-
-    # stars are formed from the gas set aside for star formation
-    stars = form_stars(num_stars, sigma_gas, galaxy_age)
-
-    # a statistical weight is computed to normalize the masses of the
-    # new stars to the gas density available for star formation
-    statistical_weight = sum(star_forming_gas_density) / total_stellar_mass(stars)
-
-    # stars are classified as 'mortal' or 'immortal' based on their
-    # lifetimes relative to the current time and the age of the galaxy
-    sort_stars(stars, mortal_stars, immortal_stars, statistical_weight, t)
 
     # the ISM mass by species is evolved in time
     sigma_gas += (
@@ -554,7 +524,7 @@ def main():
     white_dwarfs = []
     neutron_stars = []
 
-    dt = 0.01
+    dt = 0.05
     t = dt
     t_max = 13.6
 
@@ -564,10 +534,11 @@ def main():
     for i in range(len(elements)):
         element_list[elements[i]] += sigma_gas[i]
 
+    # time is initialized at one timestep
     time_series = [t]
 
     counter = 0
-    num_stars = 1000  # number of stars produced for each timestep
+    num_stars = 100  # number of stars produced for each timestep
 
     while t < t_max:
         advance_state(

@@ -60,7 +60,7 @@ class starParticle:
 
     Methods:
             stellar_lifetime():
-                    Calculates the lifetime of a newborn star. [Gyr]
+                    Calculates the lifetime of a newborn star from its mass. [Gyr]
     """
 
     def __init__(self, age, mass, statistical_weight, classification, composition):
@@ -251,7 +251,7 @@ def type_ia_delay(dtd):
 
 def planetary_nebulae(mortal_stars, white_dwarfs):
     """
-    Return ejecta from planetary nebulae. [M.]
+    Return ejecta from planetary nebulae. [M. / pc^2]
 
     Inputs:
             mortal_stars: class instance array
@@ -286,7 +286,7 @@ def planetary_nebulae(mortal_stars, white_dwarfs):
 
 def core_collapse_supernovae(mortal_stars, neutron_stars, black_holes):
     """
-    Return ejecta from core-collapse supernovae. [M.]
+    Return ejecta from core-collapse supernovae. [M. / pc^2]
 
     Inputs:
             mortal_stars: class instance array
@@ -329,7 +329,7 @@ def core_collapse_supernovae(mortal_stars, neutron_stars, black_holes):
 
 def type_ia_supernovae(white_dwarfs, immortal_stars):
     """
-    Return ejecta from type Ia supernovae. [M.]
+    Return ejecta from type Ia supernovae. [M. / pc^2]
 
     Inputs:
             white_dwarfs: class instance array
@@ -366,7 +366,7 @@ def type_ia_supernovae(white_dwarfs, immortal_stars):
 
 def binary_neutron_star_mergers(neutron_stars, immortal_stars):
     """
-    Return ejecta from binary neutron star mergers. [M.]
+    Return ejecta from binary neutron star mergers. [M. / pc^2]
 
     Inputs:
             neutron_stars: class instance array
@@ -381,7 +381,7 @@ def binary_neutron_star_mergers(neutron_stars, immortal_stars):
     while i < len(neutron_stars):
         ns_remnant = neutron_stars[i]
 
-        if ns_remnant.age > 0.5:
+        if ns_remnant.age > 2.5:
             u = randint(1, 30)
 
             if u == 1:
@@ -521,7 +521,7 @@ def main():
     white_dwarfs = []
     neutron_stars = []
 
-    dt = 0.05  # [Gyr]
+    dt = 0.01  # [Gyr]
     t = dt  # [Gyr]
     t_max = galaxy_age  # [Gyr]
 
@@ -535,7 +535,7 @@ def main():
     time_series = [t]
 
     counter = 0
-    num_stars = 100  # number of stars produced for each timestep
+    num_stars = 1000  # number of stars produced for each timestep
 
     while t < t_max:
         advance_state(
@@ -557,8 +557,8 @@ def main():
         counter += 1
         time_series.append(t)
 
-    age_metallicity(immortal_stars, elements, num_stars)
-    # abundance_pattern(immortal_stars, elements, "fe", "o", num_stars)
+    # age_metallicity(immortal_stars, elements, num_stars)
+    abundance_pattern(immortal_stars, elements, "fe", "o", num_stars)
 
 
 main()
